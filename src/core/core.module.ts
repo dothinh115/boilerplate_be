@@ -1,8 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { DatabaseModule } from './database/database.module';
 import { UserModule } from './user/user.module';
-import { PostModule } from './post/post.module';
 import { ConfigModule } from '@nestjs/config';
+import { SchemaModule } from './schema/schema.module';
+import { QueryModule } from './query/query.module';
 
 @Global()
 @Module({
@@ -12,7 +13,8 @@ import { ConfigModule } from '@nestjs/config';
     }),
     DatabaseModule,
     UserModule,
-    PostModule,
+    SchemaModule,
+    QueryModule,
   ],
 })
 export class CoreModule {}
