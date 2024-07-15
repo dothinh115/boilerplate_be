@@ -1,0 +1,368 @@
+import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  EntityManager,
+  EntityMetadata,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
+import { TFieldPick, TQuery } from '../utils/model.util';
+import { InjectEntityManager } from '@nestjs/typeorm';
+import { RelationMetadata } from 'typeorm/metadata/RelationMetadata';
+
+@Injectable()
+export class QueryService {
+  constructor(@InjectEntityManager() private manager: EntityManager) {}
+
+  private async handleJoinNestedRelations(
+    result: {
+      [key: string]: string;
+    },
+    queryBuilder: SelectQueryBuilder<any>,
+    repository: Repository<any>,
+    alias: string,
+    prevField: string = alias,
+    processedRelations: Set<string> = new Set(),
+  ) {
+    //lấy toàn bộ relations của repo hiện tại
+    const relations = repository.metadata.relations;
+
+    await Promise.all(
+      relations.map(async (relation) => {
+        //nếu có relation thì tạo identifier và add vào process để tránh vòng lặp vô hạn giữa các quan hệ trùng lặp
+        const relationIdentifier = `${repository.metadata.name}:${relation.propertyName}`;
+        //nếu chưa xử lý quan hệ thì xử lý và add identifier vào process
+        if (!processedRelations.has(relationIdentifier)) {
+          processedRelations.add(relationIdentifier);
+          //lấy entity và repo của relation
+          const entity = relation.type;
+          const nestedRelationRepo =
+            this.manager.connection.getRepository(entity);
+          //tạo alias
+          const currentAlias = `${alias}_${relation.propertyName}`;
+          //nếu có joincolumn mới tiến hành join
+          if (relation.joinColumns && relation.joinColumns.length > 0) {
+            await queryBuilder.leftJoinAndSelect(
+              `${alias}.${relation.propertyName}`,
+              currentAlias,
+            );
+            result[`${prevField}.${relation.propertyName}`] = currentAlias;
+          }
+
+          //tiếp tục đệ quy để chạy tiếp các quan hệ lồng nhau
+          await this.handleJoinNestedRelations(
+            result,
+            queryBuilder,
+            nestedRelationRepo,
+            currentAlias,
+            `${alias}.${relation.propertyName}`,
+            processedRelations,
+          );
+        }
+      }),
+    );
+  }
+
+  private checkIfRelation(fields: [string, string]) {
+    //đầu tiên, chúng ta sẽ đi tìm xem liệu phần tử áp cuối này có là propertyName của bất kỳ entity nào hay ko, vì có thể cách đặt tên sẽ ko giống nhau
+    //ví dụ như là bảng post sẽ có prop là categories = [] dù bảng là category
+    const entities = this.manager.connection.entityMetadatas;
+    let relationOfProperty: RelationMetadata | undefined;
+    for (const entity of entities) {
+      const match = entity.relations.find(
+        (relation) => relation.propertyName === fields[0],
+      );
+      if (match) {
+        relationOfProperty = match;
+        break;
+      }
+    }
+
+    //nếu nó là propertyName của 1 relation nào đó, thì phải dựa vào relation đó để lấy dc cái cái type của nó ra
+    if (relationOfProperty) {
+      const target = relationOfProperty.type;
+      const repo = this.manager.connection.getRepository(target);
+      //đã có repo của vị trí áp cuối thì kiểm tra relation xem có chứa vị trí cuối hay ko
+
+      const result = repo.metadata.relations.find(
+        (relation) => relation.propertyName === fields[1],
+      );
+      return result ? true : false;
+    }
+    //nếu không, có thể ko phải là categories mà chính là category, lúc này mình có thể tìm trong metadata xem có cái nào là nó hay ko
+    else {
+      const find = entities.find(
+        (entity) => entity.name.toLowerCase() === fields[0],
+      );
+      const result = find.relations.find(
+        (relation) => relation.propertyName === fields[1],
+      );
+      return result ? true : false;
+    }
+  }
+
+  private getProperties(entityName: string) {
+    const entities = this.manager.connection.entityMetadatas;
+    let relationOfProperty: RelationMetadata | undefined;
+    for (const entity of entities) {
+      const match = entity.relations.find(
+        (relation) => relation.propertyName === entityName,
+      );
+      if (match) {
+        relationOfProperty = match;
+        break;
+      }
+    }
+
+    let entity: EntityMetadata;
+    if (relationOfProperty) {
+      entity = entities.find(
+        (entity) => entity.target === relationOfProperty.type,
+      );
+    } else {
+      entity = entities.find(
+        (entity) => entity.name.toLowerCase() === entityName,
+      );
+    }
+
+    const properties = entity.columns
+      .filter((column) =>
+        entity.relations.some(
+          (rel) => rel.propertyName !== column.propertyName,
+        ),
+      )
+      .map((column) => column.propertyName);
+    return properties;
+  }
+
+  private handleFields(
+    fields: string[],
+    entityName: string,
+  ): {
+    [key: string]: TFieldPick;
+  } {
+    let result = new Map<string, TFieldPick>();
+    fields.map((field) => {
+      if (field.includes('.')) {
+        let fieldSplit = field.split('.').filter((x) => x !== '');
+        if (field.endsWith('*')) {
+          fieldSplit = fieldSplit.filter((x) => x !== '*');
+          if (fieldSplit.length > 1) {
+            fieldSplit.reduce((prev, cur, index) => {
+              const key = `${prev ? prev + '.' : ''}${cur}`;
+              const checkIfRelation =
+                index !== 0 &&
+                this.checkIfRelation([
+                  fieldSplit[index - 1],
+                  fieldSplit[index],
+                ]);
+              result.set(
+                key,
+                index !== fieldSplit.length - 1
+                  ? 'loadProperties'
+                  : checkIfRelation
+                    ? 'loadProperties'
+                    : 'loadSingField',
+              );
+              if (checkIfRelation) {
+                const properties = this.getProperties(cur);
+                if (properties.length > 0) {
+                  properties.map((property) =>
+                    result.set(`${key}.${property}`, 'loadSingField'),
+                  );
+                }
+              }
+              return key;
+            }, '');
+          } else {
+            const key = fieldSplit.join('');
+            result.set(key, 'loadProperties');
+            const properties = this.getProperties(key);
+            if (properties.length > 0) {
+              properties.map((property) =>
+                result.set(`${key}.${property}`, 'loadSingField'),
+              );
+            }
+          }
+        } else {
+          fieldSplit.reduce((prev, cur, index) => {
+            const key = `${prev ? prev + '.' : ''}${cur}`;
+            const checkIfRelation =
+              index !== 0 &&
+              this.checkIfRelation([fieldSplit[index - 1], fieldSplit[index]]);
+            result.set(
+              key,
+              index !== fieldSplit.length - 1
+                ? 'loadProperties'
+                : checkIfRelation
+                  ? 'loadIds'
+                  : 'loadSingField',
+            );
+            return key;
+          }, '');
+        }
+      } else {
+        //check xem trường muốn lấy có phải là relation của repo chính hay ko
+        const checkIfRelation = this.checkIfRelation([entityName, field]);
+        if (checkIfRelation) result.set(field, 'loadIds');
+        else result.set(field, 'loadSingField');
+      }
+    });
+    const setArr = Array.from(result);
+    return setArr.reduce((prev, [key, value]) => {
+      prev[key] = value;
+      return prev;
+    }, {});
+  }
+
+  private handleFilter(filter: object) {
+    // console.log(filter);
+  }
+
+  private async handleQueryBuilder(
+    queryBuilder: SelectQueryBuilder<any>,
+    repository: Repository<any>,
+    filter: object,
+  ) {
+    const alias = queryBuilder.alias.toLowerCase();
+    let aliasOfNestedFields: {
+      [key: string]: string;
+    } = {
+      [alias]: alias,
+    };
+
+    const filterObj = this.handleFilter(filter);
+
+    //join toàn bộ quan hệ lồng nhau
+    await this.handleJoinNestedRelations(
+      aliasOfNestedFields,
+      queryBuilder,
+      repository,
+      alias,
+    );
+  }
+
+  private propertyMap({
+    result,
+    object,
+    fieldPickedData,
+    prevKey = '',
+    loadIds = false,
+    loadAllProperty = false,
+  }: {
+    result: { [key: string]: any | any[] };
+    object: any[];
+    fieldPickedData: { [key: string]: TFieldPick[] | TFieldPick };
+    prevKey?: string;
+    loadIds?: boolean;
+    loadAllProperty?: boolean;
+  }) {
+    const [key, value] = object;
+    const currentKey = prevKey ? `${prevKey}.${key}` : key;
+
+    const isLoadSingleField = fieldPickedData[currentKey] === 'loadSingField';
+
+    const isLoadProperties = fieldPickedData[currentKey] === 'loadProperties';
+
+    const isLoadIds = fieldPickedData[currentKey] === 'loadIds';
+
+    if (value && Array.isArray(value)) {
+      if (isLoadProperties) {
+        value.map((object: any) => {
+          const newItem = {};
+          Object.entries(object).map((itemProp) =>
+            this.propertyMap({
+              result: newItem,
+              object: itemProp,
+              fieldPickedData,
+              prevKey: currentKey,
+            }),
+          );
+          if (Object.keys(newItem).length > 0) {
+            result[key] ? result[key].push(newItem) : (result[key] = [newItem]);
+          }
+        });
+      } else if (
+        isLoadIds ||
+        loadIds ||
+        fieldPickedData[prevKey] === 'loadProperties'
+      ) {
+        console.log(object);
+        result[key] = value.flatMap((item) => item.id);
+      }
+    } else if (value && typeof value === 'object') {
+      if (isLoadProperties) {
+        if (!result[key]) result[key] = {};
+        Object.entries(value).map(
+          (prop) =>
+            (result[key] = this.propertyMap({
+              result: result[key],
+              object: prop,
+              fieldPickedData,
+              prevKey: currentKey,
+            })),
+        );
+        if (Object.keys(result[key]).length === 0) delete result[key];
+      } else if (
+        isLoadIds ||
+        loadIds ||
+        fieldPickedData[prevKey] === 'loadProperties'
+      )
+        result[key] = value.id;
+    } else {
+      //nếu trường hợp là string | number thì gán lại cho result
+      //xem currentKey có bên trong dataPicker hay ko
+      if (isLoadSingleField || loadIds) result[key] = value;
+    }
+
+    return result;
+  }
+
+  private mapResult(
+    result: any[],
+    fieldPickedData: { [key: string]: TFieldPick[] | TFieldPick },
+  ) {
+    const noFieldsPick =
+      Object.keys(fieldPickedData).length === 0 ||
+      Object.keys(fieldPickedData).some((x) => x === '*');
+    result = result.map((item) => {
+      const resultObj = {};
+      for (const prop of Object.entries(item)) {
+        this.propertyMap({
+          result: resultObj,
+          object: prop,
+          fieldPickedData,
+          loadIds: noFieldsPick ? true : false,
+        });
+      }
+      return resultObj;
+    });
+    return result;
+  }
+
+  public async handleQuery(repository: Repository<any>, query: TQuery) {
+    const fields = query.fields
+      ? query.fields.split(',').filter((x) => x !== '')
+      : [];
+    const filter = query.filter;
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+
+    const entityName = repository.metadata.name.toLowerCase();
+    const queryBuilder = repository.createQueryBuilder(entityName);
+
+    await this.handleQueryBuilder(queryBuilder, repository, filter);
+
+    const fieldPickData = this.handleFields(fields, entityName);
+    console.log(fieldPickData);
+    try {
+      let result: any[];
+      queryBuilder.skip((page - 1) * limit).take(limit);
+      result = await queryBuilder.getMany();
+      result = this.mapResult(result, fieldPickData);
+
+      return result;
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+}

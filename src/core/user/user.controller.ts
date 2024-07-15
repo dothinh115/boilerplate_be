@@ -1,34 +1,40 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Body, Param, Query } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { TQuery } from '../utils/model.util';
+import { Routing } from '../decorators/route.decorator';
+import { PostRouting } from '../decorators/method/PostRouting.decorator';
+import { GetRouting } from '../decorators/method/GetRouting.decorator';
+import { PatchRouting } from '../decorators/method/PatchRouting.decorator';
+import { DeleteRouting } from '../decorators/method/DeleteRouting.decorator';
 
+@Routing()
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
+  @PostRouting()
+  create(@Body() body: CreateUserDto, @Query() query: TQuery) {
+    return this.userService.create(body, query);
   }
 
-  @Get()
-  findAll() {
-    return this.userService.findAll();
+  @GetRouting()
+  find(@Query() query: TQuery) {
+    return this.userService.find(query);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
+  @PatchRouting(':id')
+  update(
+    @Param('id') id: string,
+    @Body() body: UpdateUserDto,
+    @Query() query: TQuery,
+  ) {
+    return this.userService.update(id, body, query);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(+id, updateUserDto);
-  }
-
-  @Delete(':id')
+  @DeleteRouting(':id')
   remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
+    return this.userService.remove(id);
   }
 }

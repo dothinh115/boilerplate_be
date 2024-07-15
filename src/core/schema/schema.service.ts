@@ -1,11 +1,15 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectEntityManager } from '@nestjs/typeorm';
 import { EntityManager } from 'typeorm';
-import { getAllMetadata, getMetadata } from '../utils/metadata.util';
+import { getAllMetadata } from '../utils/metadata.util';
+import { OrmService } from '../query/orm.service';
 
 @Injectable()
 export class SchemaService {
-  constructor(@InjectEntityManager() private manager: EntityManager) {}
+  constructor(
+    @InjectEntityManager() private manager: EntityManager,
+    private ormService: OrmService,
+  ) {}
   findOne(entityName: string) {
     try {
       const entity = this.manager.connection.entityMetadatas.find(
@@ -13,7 +17,6 @@ export class SchemaService {
       );
       if (!entity) throw new Error('Không có schema này');
       const schema = {};
-
       for (const column of entity.columns) {
         const metadata = getAllMetadata(
           (entity.target as Function).prototype,
@@ -21,7 +24,20 @@ export class SchemaService {
         );
 
         schema[column.propertyName] = {
-          type: (column.type as any).name.toLowerCase(),
+          type:
+            typeof column.type === 'function'
+              ? column.type.name.toLowerCase()
+              : column.type,
+          required: column.isNullable ? false : true,
+          ...(column.relationMetadata && {
+            relation: this.ormService.getRelationEntityName(
+              column.relationMetadata.type,
+              column.relationMetadata.propertyName,
+            ),
+          }),
+          ...(column.default && {
+            default: column.default,
+          }),
           ...metadata,
         };
       }
@@ -33,6 +49,10 @@ export class SchemaService {
           );
           schema[relation.propertyName] = {
             type: 'array',
+            relation: this.ormService.getRelationEntityName(
+              relation.type,
+              relation.propertyName,
+            ),
             ...metadata,
           };
         }
