@@ -12,6 +12,7 @@ export class SettingService {
     @InjectRepository(Setting) private settingRepo: Repository<Setting>,
     private queryService: QueryService,
   ) {}
+
   async find(query: TQuery) {
     return await this.queryService.query({
       repository: this.settingRepo,

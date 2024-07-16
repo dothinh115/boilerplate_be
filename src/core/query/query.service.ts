@@ -16,14 +16,16 @@ export class QueryService {
   public async query({
     repository,
     query = {},
+    id,
   }: {
     repository: Repository<any>;
     query: TQuery;
+    id?: string | number;
   }) {
     const fields = query.fields
       ? query.fields.split(',').filter((x) => x !== '')
       : [];
-    const filter = query.filter || {};
+    let filter = query.filter || {};
     const page = query.page || 1;
     const limit = query.limit || 10;
     const meta = query.meta
@@ -32,6 +34,13 @@ export class QueryService {
     const sort = query.sort
       ? query.sort.split(',').filter((x) => x !== '')
       : ['id'];
+
+    if (id) {
+      filter = {
+        ...filter,
+        id: { _eq: id },
+      };
+    }
 
     try {
       const queryBuilder = this.queryBuilderService.create(repository);
@@ -84,16 +93,10 @@ export class QueryService {
       const created = await repository.save(newItem);
 
       //trả ra kết quả với filter là id của item vừa lưu
-      const filterWithId = {
-        ...query,
-        filter: {
-          ...(query.filter ?? {}),
-          id: { _eq: created.id },
-        },
-      };
       return await this.query({
         repository,
-        query: filterWithId,
+        query,
+        id: created.id,
       });
     } catch (error) {
       throw new BadRequestException(error.message);
@@ -132,16 +135,10 @@ export class QueryService {
         item[key] = body[key];
       }
       const updated = await repository.save(item);
-      const filterWithId = {
-        ...query,
-        filter: {
-          ...(query.filter ?? {}),
-          id: { _eq: updated.id },
-        },
-      };
       return await this.query({
         repository,
-        query: filterWithId,
+        query,
+        id: updated.id,
       });
     } catch (error) {
       throw new BadRequestException(error.message);

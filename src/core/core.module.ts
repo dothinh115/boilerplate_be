@@ -13,6 +13,7 @@ import { SettingModule } from './setting/setting.module';
 import { AuthModule } from './auth/auth.module';
 import { GuardModule } from './guards/guard.module';
 import { PermissionGuard } from './guards/permission.guard';
+import { MeModule } from './me/me.module';
 
 @Global()
 @Module({
@@ -31,6 +32,7 @@ import { PermissionGuard } from './guards/permission.guard';
     SettingModule,
     AuthModule,
     GuardModule,
+    MeModule,
   ],
   providers: [
     InitService,

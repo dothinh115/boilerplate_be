@@ -30,6 +30,7 @@ export class InitService implements OnModuleInit {
     const server = httpAdapter.getHttpServer();
     const router = server._events.request._router;
 
+    //lấy tất cả routes trong dự án
     const routes: { path: string; method: MethodType; isProtected: boolean }[] =
       router.stack
         .map((routeItem) => {
@@ -42,7 +43,11 @@ export class InitService implements OnModuleInit {
           }
         })
         .filter((route) => route !== undefined);
+
+    //lấy các controllers
     const controllers = this.discoveryService.getControllers();
+
+    //tạo thông tin về routes
     controllers.map(async (controller) => {
       const { metatype } = controller;
       const isRouteController = getMetadata(ROUTE_METADATA, metatype, '');
@@ -61,6 +66,7 @@ export class InitService implements OnModuleInit {
         });
       }
     });
+
     const createdRoute = [];
     for (const route of routes) {
       const isExists = await this.routeRepo.findOne({
@@ -80,6 +86,28 @@ export class InitService implements OnModuleInit {
 
     if (createdRoute.length > 0) {
       await this.routeRepo.save(createdRoute);
+    }
+
+    await this.clearRemovedRoutes(routes);
+  }
+
+  //hàm xoá các route dư thừa
+  private async clearRemovedRoutes(
+    routes: { path: string; method: MethodType; isProtected: boolean }[],
+  ) {
+    const existedRoutes = await this.routeRepo.find();
+    const shouldRemovedRoutes = existedRoutes.filter(
+      (existedRoute) =>
+        !routes.some(
+          (route) =>
+            route.path === existedRoute.path &&
+            route.method === existedRoute.method,
+        ),
+    );
+
+    if (shouldRemovedRoutes.length > 0) {
+      const idsToRemove = shouldRemovedRoutes.map((route) => route.id);
+      await this.routeRepo.delete(idsToRemove);
     }
   }
 
