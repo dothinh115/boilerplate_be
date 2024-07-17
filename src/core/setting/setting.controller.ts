@@ -1,20 +1,21 @@
-import { Controller, Body, Param, Query } from '@nestjs/common';
+import { Controller, Body, Param, Query, Get, Patch } from '@nestjs/common';
 import { SettingService } from './setting.service';
 import { UpdateSettingDto } from './dto/update-setting.dto';
 import { TQuery } from '../utils/model.util';
-import { GetRouting } from '../decorators/method/GetRouting.decorator';
-import { PatchRouting } from '../decorators/method/PatchRouting.decorator';
+import { Protected } from '../decorators/protected-route.decorator';
 
 @Controller('setting')
 export class SettingController {
   constructor(private readonly settingService: SettingService) {}
 
-  @GetRouting()
+  @Get()
+  @Protected()
   find(@Query() query: TQuery) {
     return this.settingService.find(query);
   }
 
-  @PatchRouting(':id')
+  @Patch(':id')
+  @Protected()
   update(
     @Param('id') id: string,
     @Body() updateSettingDto: UpdateSettingDto,

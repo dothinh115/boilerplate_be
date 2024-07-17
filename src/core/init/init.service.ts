@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  OnModuleInit,
+  RequestMethod,
+} from '@nestjs/common';
 import { DiscoveryService, HttpAdapterHost, Reflector } from '@nestjs/core';
 import { getMetadata } from '../utils/metadata.util';
 import { ROUTE_METADATA, getProperties } from '../decorators/route.decorator';
@@ -8,6 +13,10 @@ import { User } from '../user/entities/user.entity';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { MethodType, Route } from '../route/entities/route.entity';
+import settings from '../../../settings.json';
+import { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { PROTECTED_ROUTE_KEY } from '../decorators/protected-route.decorator';
 
 @Injectable()
 export class InitService implements OnModuleInit {
@@ -27,42 +36,46 @@ export class InitService implements OnModuleInit {
 
   private async createRoutes() {
     const httpAdapter = this.adapterHost.httpAdapter;
-    const server = httpAdapter.getHttpServer();
-    const router = server._events.request._router;
-
-    //lấy tất cả routes trong dự án
-    const routes: { path: string; method: MethodType; isProtected: boolean }[] =
-      router.stack
-        .map((routeItem) => {
-          if (routeItem.route) {
-            return {
-              path: routeItem.route.path,
-              method: Object.keys(routeItem.route.methods)[0],
-              isProtected: false,
-            };
-          }
-        })
-        .filter((route) => route !== undefined);
-
-    //lấy các controllers
+    let routes: any[] = [];
     const controllers = this.discoveryService.getControllers();
 
-    //tạo thông tin về routes
-    controllers.map(async (controller) => {
-      const { metatype } = controller;
-      const isRouteController = getMetadata(ROUTE_METADATA, metatype, '');
-      if (isRouteController) {
-        const properties: { path: string; method: MethodType }[] =
-          getProperties(metatype);
-        const controllerPath = this.reflector.get<string>('path', metatype);
-        properties.forEach((property) => {
-          const findIndex = routes.findIndex(
-            (route) =>
-              route.path ===
-                `/${controllerPath}${property.path ? `/${property.path}` : ''}` &&
-              route.method === property.method,
+    controllers.forEach((controller) => {
+      const { instance } = controller;
+      if (instance) {
+        const controllerPath = this.reflector.get<string>(
+          PATH_METADATA,
+          instance.constructor,
+        );
+
+        const methods = Object.getOwnPropertyNames(
+          Object.getPrototypeOf(instance),
+        );
+
+        methods.forEach((methodName) => {
+          const methodHandler = instance[methodName];
+          const methodPath = this.reflector.get<string>(
+            PATH_METADATA,
+            methodHandler,
           );
-          if (findIndex !== -1) routes[findIndex].isProtected = true;
+          const requestMethod = this.reflector.get<RequestMethod>(
+            METHOD_METADATA,
+            methodHandler,
+          );
+
+          const isProtected = this.reflector.get<RequestMethod>(
+            PROTECTED_ROUTE_KEY,
+            methodHandler,
+          );
+
+          const method = RequestMethod[requestMethod];
+
+          if (method) {
+            routes.push({
+              path: `${controllerPath === '/' ? '' : `/${controllerPath}`}${methodPath === '/' ? '' : `/${methodPath}`}`,
+              method: method,
+              isProtected: isProtected ? true : false,
+            });
+          }
         });
       }
     });

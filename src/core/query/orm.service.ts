@@ -69,6 +69,7 @@ export class OrmService {
         properties.push(relation.propertyName);
       }
     });
+
     return properties;
   }
 

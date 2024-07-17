@@ -22,12 +22,12 @@ export class PermissionGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
     //check xem route đang được truy cập có được phân quyền hay ko
-    const { method, route } = req;
-    let url: string = route.path;
-    const isProtected = await this.routeRepo.findOne({
+    const { url, method } = req;
+
+    const currentRoute = await this.routeRepo.findOne({
       where: {
         path: url,
-        method: method.toLowerCase(),
+        method: method,
       },
     });
     //tiến hành lấy thông tin user nếu có
@@ -40,13 +40,13 @@ export class PermissionGuard implements CanActivate {
       if (user) req.user = user; //đưa thông tin user vào req
     }
 
-    if (isProtected.isProtected) {
+    if (currentRoute && currentRoute.isProtected) {
       //nếu route dc protect thì yêu cầu phải có user
       if (!user) throw new UnauthorizedException();
       //nếu là rootUser hoặc role được access thì pass ngay
       if (
         user.rootUser ||
-        isProtected.roles.some((role) => role.id === user.role.id)
+        currentRoute.roles.some((role) => role.id === user.role.id)
       )
         return true;
 

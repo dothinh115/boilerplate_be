@@ -58,7 +58,7 @@ export class SchemaService {
         }
       }
 
-      return schema;
+      return { data: schema };
     } catch (error) {
       throw new BadRequestException(error.message);
     }

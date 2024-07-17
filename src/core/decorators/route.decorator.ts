@@ -6,7 +6,7 @@ export const ROUTE_METADATA = 'ROUTE_METADATA';
 export const Routing = (obj?: {
   path?: string;
   method: 'post' | 'patch' | 'get' | 'delete';
-}): ClassDecorator & MethodDecorator => {
+}): ClassDecorator => {
   return (target: any, propertyKey?: string | symbol) => {
     if (target) {
       addMetadata(ROUTE_METADATA, true)(target, '');

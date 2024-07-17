@@ -23,7 +23,18 @@ export class QueryBuilderService {
     private queryUtilService: QueryUtilService,
   ) {}
 
+  private reset() {
+    this.queryBuilder = null;
+    this.entityName = null;
+    this.joinData = new Set<string>();
+    this.metaData = [];
+    this.isFiltering = false;
+    this.fieldDataArr = [];
+    this.clonedQueryBuilder = null;
+  }
+
   create(repository: Repository<any>) {
+    this.reset();
     this.entityName = repository.metadata.name.toLowerCase();
     this.queryBuilder = repository.createQueryBuilder(this.entityName);
     this.clonedQueryBuilder = this.queryBuilder.clone();
@@ -97,7 +108,6 @@ export class QueryBuilderService {
   async build({ page, limit }: { page: number; limit: number }) {
     //sau khi có dc joinData thì tiến hành join vào
     const joinDataArr = Array.from(this.joinData);
-
     if (joinDataArr.length > 0) {
       await Promise.all(
         joinDataArr.map(async (item) => {

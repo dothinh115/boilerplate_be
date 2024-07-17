@@ -4,7 +4,7 @@ import { IsNotEmpty } from 'class-validator';
 export class UpdateMeDto {
   @Expose()
   @IsNotEmpty({
-    message: 'password không được đẻ trống!',
+    message: 'password không được để trống!',
   })
   password: string;
 }

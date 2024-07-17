@@ -22,10 +22,10 @@ export class MeController {
 
   @Patch()
   update(
-    @Body() updateMeDto: UpdateMeDto,
+    @Body() body: UpdateMeDto,
     @Req() req: CustomRequest,
     @Query() query: TQuery,
   ) {
-    return this.meService.update(updateMeDto, req, query);
+    return this.meService.update(body, req, query);
   }
 }
