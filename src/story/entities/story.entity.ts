@@ -1,6 +1,5 @@
 import { Author } from 'src/author/entities/author.entity';
 import { Category } from 'src/category/entities/category.entity';
-import { Chapter } from 'src/chapter/entities/chapter.entity';
 import { autoSlug } from 'src/core/middlewares/auto-slug.middleware';
 import {
   BeforeInsert,
@@ -13,7 +12,6 @@ import {
   JoinTable,
   ManyToMany,
   ManyToOne,
-  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -57,9 +55,6 @@ export class Story {
   @ManyToMany(() => Category, { cascade: true, eager: true })
   @JoinTable()
   categories: Category[];
-
-  @OneToMany(() => Chapter, (chapter) => chapter.story)
-  chapters: Chapter[];
 
   @CreateDateColumn()
   createdAt: Date;

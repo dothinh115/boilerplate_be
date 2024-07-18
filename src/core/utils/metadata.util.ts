@@ -8,7 +8,7 @@ export const addMetadata = (key: string, value: any) => {
 export const getMetadata = (
   key: string,
   target: Object,
-  propertyKey: string | symbol,
+  propertyKey?: string | symbol,
 ) => {
   return Reflect.getMetadata(key, target, propertyKey);
 };

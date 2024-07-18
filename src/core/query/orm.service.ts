@@ -24,32 +24,17 @@ export class OrmService {
     return undefined;
   }
 
-  checkIfRelation(fields: [string, string]): boolean {
-    let relationOfProperty: EntityMetadata = this.getEntityFromProperty(
-      fields[0],
-    );
-    return relationOfProperty?.relations.find(
-      (relation) => relation.propertyName === fields[1],
-    )
-      ? true
-      : false || undefined;
-  }
-
-  findRelationType(fields: [string, string]) {
+  checkIfRelation(fields: [string, string]) {
     let relationOfProperty: EntityMetadata = this.getEntityFromProperty(
       fields[0],
     );
     const find = relationOfProperty?.relations.find(
       (relation) => relation.propertyName === fields[1],
     );
-    if (!find) return null;
-    const { isManyToMany, isOneToMany, isOneToOne, isManyToOne } = find;
-    return {
-      isManyToMany,
-      isManyToOne,
-      isOneToMany,
-      isOneToOne,
-    };
+    if (find) {
+      return find.relationType;
+    }
+    return null;
   }
 
   getProperties(entityName: string): string[] {
@@ -59,7 +44,7 @@ export class OrmService {
       (column) => column.propertyName,
     );
 
-    // Xử lý các quan hệ OneToMany
+    // Xử lý các quan hệ
     entityMetadata.relations.forEach((relation) => {
       if (
         relation.isOneToMany ||

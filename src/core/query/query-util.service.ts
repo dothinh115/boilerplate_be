@@ -77,11 +77,11 @@ export class QueryUtilService {
 
   convertToEntity<T>(entityName: string, body: T) {
     for (const [key, value] of Object.entries(body)) {
-      const relationType = this.ormService.findRelationType([entityName, key]);
+      const relationType = this.ormService.checkIfRelation([entityName, key]);
       if (relationType) {
         let propertyData: { id: string | number } | { id: string | number }[];
 
-        if (relationType.isManyToMany && Array.isArray(value)) {
+        if (relationType === 'many-to-many' && Array.isArray(value)) {
           propertyData = value.map((item) => ({ id: item }));
         } else {
           propertyData = {

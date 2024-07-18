@@ -14,6 +14,7 @@ import { AuthModule } from './auth/auth.module';
 import { GuardModule } from './guards/guard.module';
 import { PermissionGuard } from './guards/permission.guard';
 import { MeModule } from './me/me.module';
+import { UploadModule } from './upload/upload.module';
 
 @Global()
 @Module({
@@ -33,6 +34,7 @@ import { MeModule } from './me/me.module';
     AuthModule,
     GuardModule,
     MeModule,
+    UploadModule,
   ],
   providers: [
     InitService,

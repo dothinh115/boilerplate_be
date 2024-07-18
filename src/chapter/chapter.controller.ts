@@ -12,10 +12,8 @@ import { ChapterService } from './chapter.service';
 import { CreateChapterDto } from './dto/create-chapter.dto';
 import { UpdateChapterDto } from './dto/update-chapter.dto';
 import { TQuery } from 'src/core/utils/model.util';
-import { Routing } from 'src/core/decorators/route.decorator';
 import { Protected } from 'src/core/decorators/protected-route.decorator';
 
-@Routing()
 @Controller('chapter')
 export class ChapterController {
   constructor(private readonly chapterService: ChapterService) {}

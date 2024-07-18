@@ -88,71 +88,137 @@ export class FilterService {
           object['and'].push(result);
           return result;
         } else {
-          let property: string;
-          const findEntity =
-            this.ormService.getEntityFromProperty(prevProperty);
-          if (findEntity) property = 'id';
-          else property = prevProperty;
-
+          //chuyển value về đúng định dạng
           const checkIfNumber =
             typeof Number(value) === 'number' && !isNaN(Number(value));
           if (checkIfNumber) value = Number(value);
 
           const checkIfArray = this.commonService.isArray(value as string);
           if (checkIfArray) value = JSON.parse(value as string);
+          //
 
-          if ((key === '_in' || key === '_nin') && !Array.isArray(value))
-            throw new Error('filter: _in và _nin phải truyền vào 1 mảng');
-
-          const uniqueKey = `${property}_${Math.random()}`;
-          const val =
-            key === '_in' || key === '_nin'
-              ? `(:...${uniqueKey})`
-              : key === '_contains' || key === '_ncontains'
-                ? `unaccent(:${uniqueKey})`
-                : `:${uniqueKey}`;
-
-          let field = '';
-          if (findEntity) {
-            //Lưu ý rằng ở đây có 1 cấp toán tử ví dụ như _eq nên phải check xem trước nó có phải là entity hay ko, nếu đúng thì phải sử dụng alias của nó, ví dụ chapter_story.title
-            if (key === '_contains' || key === '_ncontains') {
-              field = `unaccent(${prevAlias})`;
-            } else {
-              field = prevAlias;
-            }
-          } else {
-            const splitAlias = prevAlias.split('_');
-            const slicedAlias = splitAlias.slice(0, -1);
-            field =
-              key === '_contains' || key === '_ncontains'
-                ? `unaccent(${slicedAlias.join('_')}`
-                : slicedAlias.join('_');
-          }
-
-          if (key === '_contains' || key === '_ncontains') {
-            field += `.${property})`;
-          } else {
-            field += `.${property}`;
-          }
-
+          //kiểm tra toán tử hợp lệ
           if (!compareKey[key])
             throw new Error(
               `filter: Compare key không chính xác, compare key có dạng: _eq, _neq_, _lt, _lte, _gt, _gte, _contains, _ncontains, _in, _nin `,
             );
 
-          const where = `${field} ${compareKey[key]} ${val}`;
+          //tìm cặp many to many relation gần nhất
+          let propertiesSplit = prevAlias.split('_');
+          let manyToManyRelationPair: string[];
+          const isEntity = this.ormService.getEntityFromProperty(prevProperty);
+          let property: string = isEntity ? 'id' : prevProperty;
+          const uniqueKey = `${property}_${Math.random()}`;
+
+          while (propertiesSplit.length > 1) {
+            const length = propertiesSplit.length - 1;
+            const checkIfRelation = this.ormService.checkIfRelation([
+              propertiesSplit[length - 1],
+              propertiesSplit[length],
+            ]);
+            if (checkIfRelation === 'many-to-many') {
+              manyToManyRelationPair = [
+                propertiesSplit[length - 1],
+                propertiesSplit[length],
+              ];
+              break;
+            }
+            propertiesSplit = propertiesSplit.filter(
+              (property) => property !== propertiesSplit[length],
+            );
+          }
+
+          let where = '';
+
+          //nếu có cặp many to many relation thì chỉ check exists của điều kiện
+          if (manyToManyRelationPair && manyToManyRelationPair.length > 0) {
+            const [joinTable, inverseJoinTable] = manyToManyRelationPair;
+            const inverseJoinTableMetadata =
+              this.ormService.getEntityFromProperty(inverseJoinTable);
+            const metadata = this.ormService
+              .getEntityFromProperty(joinTable)
+              .manyToManyRelations.find(
+                (relation) => relation.type === inverseJoinTableMetadata.target,
+              );
+
+            if (metadata) {
+              const { junctionEntityMetadata } = metadata;
+              const tableName = junctionEntityMetadata.tableName;
+              const joinTableColumn = metadata.joinColumns[0].propertyName;
+              const inverseJoinTableColumn =
+                metadata.inverseJoinColumns[0].propertyName;
+              const isMainProperty =
+                joinTable === prevAlias.split('_').slice(1).join('');
+              let currentAlias: string;
+              if (!isMainProperty) {
+                const currentAliasIndex = prevAlias
+                  .split('_')
+                  .indexOf(joinTable);
+                currentAlias = prevAlias
+                  .split('_')
+                  .filter((val, index) => index <= currentAliasIndex)
+                  .join('_');
+              }
+
+              where += `EXISTS (SELECT 1 FROM ${tableName} sc`;
+              if (property !== 'id') {
+                const tableNameToJoin = inverseJoinTableMetadata.tableName;
+                where += ` LEFT JOIN "${tableNameToJoin}" c ON sc."${inverseJoinTableColumn}" = c.id`;
+              }
+              where += ` WHERE sc."${joinTableColumn}" = ${currentAlias ? currentAlias : joinTable}.id`;
+              if (property !== 'id') {
+                where += ` AND`;
+                if (key === '_contains' || key === '_ncontains') {
+                  where += ` unaccent(c."${property}") ILIKE unaccent('%${value}%')`;
+                } else {
+                  where += ` c."${property}" = ${value}`;
+                }
+              } else {
+                where += ` AND sc."${inverseJoinTableColumn}" ${compareKey[key]}`;
+                if (key === '_in' || key === '_nin') {
+                  where += ` (:...${uniqueKey})`;
+                } else {
+                  where += ` :${uniqueKey}`;
+                }
+              }
+              where += ')';
+            }
+          } else {
+            //nếu ko có thì where như bình thường
+            const checkIfEntity =
+              this.ormService.getEntityFromProperty(prevProperty);
+            if (!checkIfEntity)
+              prevAlias = prevAlias.split('_').slice(0, -1).join('_');
+            if (key === '_contains' || key === '_ncontains') {
+              where += `unaccent(`;
+            }
+            where += `${prevAlias}.${property}`;
+            if (key === '_contains' || key === '_ncontains') {
+              where += `)`;
+            }
+            where += ` ${compareKey[key]}`;
+            if (key === '_contains' || key === '_ncontains') {
+              where += ` unaccent(:${uniqueKey}`;
+            } else if (key === '_in' || key === '_nin') {
+              where += ` (:...${uniqueKey})`;
+            } else {
+              where += ` :${uniqueKey}`;
+            }
+            if (key === '_contains' || key === '_ncontains') {
+              where += `)`;
+            }
+          }
+
           const variable = {
             [uniqueKey]:
               key === '_contains' || key === '_ncontains'
                 ? `%${value}%`
                 : value,
           };
-
           return { where, variable };
         }
       }
     }
-
     return object;
   }
 

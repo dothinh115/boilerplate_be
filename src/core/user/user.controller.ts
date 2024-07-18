@@ -12,10 +12,8 @@ import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { TQuery } from '../utils/model.util';
-import { Routing } from '../decorators/route.decorator';
 import { Protected } from '../decorators/protected-route.decorator';
 
-@Routing()
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}

@@ -2,7 +2,7 @@ import { Request } from 'express';
 
 export type TQuery = {
   fields?: string;
-  filter?: object;
+  filter?: string;
   limit?: number;
   page?: number;
   meta?: string;

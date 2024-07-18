@@ -5,7 +5,6 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import * as path from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -15,11 +14,6 @@ async function bootstrap() {
 
   app.enableCors({
     origin: '*',
-  });
-
-  app.useStaticAssets({
-    root: path.join(__dirname, '..', 'public'),
-    prefix: '/public/',
   });
 
   app.useGlobalPipes(

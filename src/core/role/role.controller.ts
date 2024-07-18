@@ -12,10 +12,8 @@ import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { TQuery } from '../utils/model.util';
-import { Routing } from '../decorators/route.decorator';
 import { Protected } from '../decorators/protected-route.decorator';
 
-@Routing()
 @Controller('role')
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}

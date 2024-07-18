@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { TQuery } from '../utils/model.util';
 import { QueryBuilderService } from './query-builder.service';
 import { QueryUtilService } from './query-util.service';
 import { OrmService } from './orm.service';
+import * as qs from 'qs';
 
 @Injectable()
 export class QueryService {
@@ -15,13 +16,14 @@ export class QueryService {
 
   public async query({
     repository,
-    query = {},
+    query,
     id,
   }: {
     repository: Repository<any>;
-    query: TQuery;
+    query: any;
     id?: string | number;
   }) {
+    query = qs.parse(query, { depth: 10 });
     const fields = query.fields
       ? query.fields.split(',').filter((x) => x !== '')
       : [];
