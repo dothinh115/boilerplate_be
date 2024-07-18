@@ -169,9 +169,9 @@ export class FilterService {
               if (property !== 'id') {
                 where += ` AND`;
                 if (key === '_contains' || key === '_ncontains') {
-                  where += ` unaccent(c."${property}") ILIKE unaccent('%${value}%')`;
+                  where += ` unaccent(c."${property}") ILIKE unaccent(:${uniqueKey})`;
                 } else {
-                  where += ` c."${property}" = ${value}`;
+                  where += ` c."${property}" = :${uniqueKey}`;
                 }
               } else {
                 where += ` AND sc."${inverseJoinTableColumn}" ${compareKey[key]}`;
